@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Launch ALB 
+
+Parameters:
+  Environment:
+    Description: "environment" 
+    Type: String
+    AllowedValues: ["DEVELOPMENT","PRODUCTION"]
+    Default: "DEVELOPMENT"
+  ResourceOwner:
+    Description: "ResourceOwner"
+    Type: String
+    Default: "cloudNokku"
+  ProjectName:
+    Description: "Name of the Project" 
+    Type: String
+    Default: "ALB"
+  ResourceName:
+    Description: "Name of the Resource used in ALB Name(backend)" 
+    Type: String
+    Default: "frontend"
+
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    Properties:
+      VpcId: !Ref VpcId
+      GroupName: !Sub "${ProjectName}-${ResourceName}-sg"
+      Tags:
+          - Key: 'Environment'
+            Value: !Ref Environment
+          - Key: 'ResourceOwner'
+            Value: !Ref ResourceOwner
+          - Key: 'ProjectName'
+            Value: !Ref ProjectName    
+
+  SecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      GroupId:
+        Ref: SecurityGroup
+      IpProtocol: tcp 
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !Ref CIDR
+   

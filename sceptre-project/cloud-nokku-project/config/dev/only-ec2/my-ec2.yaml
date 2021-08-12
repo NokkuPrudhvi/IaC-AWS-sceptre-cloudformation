@@ -1,0 +1,45 @@
+template_path: resources/ec2.py
+parameters:
+  Environment: "DEVELOPMENT"
+  ProjectName: "cloud" 
+
+  AmiId: "ami-0c2b8ca1dad447f8a"
+  InstanceType: "t2.micro"
+  SubnetID: "subnet-01ad844262e1531b4"
+  IAMInstanceProfileRoleName: "aws-elasticbeanstalk-ec2-role"
+  VolumeType: "gp2"
+  EbsVolSize: "30"
+  SecurityGroupIDs: ["sg-062712bdd8be20072"]
+  EC2KeyPairName: "github-keypair"
+
+
+  #NeedsLoadBalancerDomain: "false"
+
+sceptre_user_data:
+  UserData:
+    Fn::Base64: |
+      #!/bin/bash
+      yum update -y
+      yum install -y httpd.x86_64
+      systemctl start httpd.service
+      systemctl enable httpd.service
+      echo "Hello World from $(hostname -f)" > /var/www/html/index.html
+  
+  BlockDeviceMappings:
+    - DeviceName: /dev/xvda
+      Ebs:
+        VolumeType: "gp2"
+        DeleteOnTermination: "true"
+        VolumeSize: 10
+    - DeviceName: /dev/xvdf
+      Ebs:
+        VolumeType: "gp2"
+        Encrypted: "true"
+        DeleteOnTermination: "true"
+        VolumeSize: 20
+  
+
+stack_tags:
+    environment_name: "development"
+    project: "cloudNokku"
+  

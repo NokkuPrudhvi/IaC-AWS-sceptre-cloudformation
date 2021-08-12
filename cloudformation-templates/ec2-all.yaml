@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Launch EC2 Instance
+
+Parameters:
+  Environment:
+    Description: "environment" 
+    Type: String
+    AllowedValues: ["DEVELOPMENT","PRODUCTION"]
+  ResourceOwner:
+    Description: "ResourceOwner"
+    Type: String
+    Default: "cloudNokku"
+  ProjectName:
+    Description: "Name of the Project" 
+    Type: String
+  
+  AmiId:
+    Description: "Ami of the instance"
+    Type: "AWS::EC2::Image::Id"
+  InstanceType:
+    Description: "InstanceType"
+    Type: String
+  SubnetID:
+    Description: "on which subnet insatnce will be launched"
+    Type: String
+  
+  IAMInstanceProfileRoleName:
+    Description: "Name of role associate with instance profile"
+    Type: String
+    Default: ""
+  
+  VolumeType:
+    Description: "Name of role associate with instance profile"
+    Type: String
+    AllowedValues: ["gp2","gp3","io1","io2","sc1","st1","standard"]
+    Default: "gp2"
+  EbsVolSize:
+    Description: "Name of role associate with instance profile"
+    Type: Number
+    Default: 20
+
+  SecurityGroupIDs:
+    Description: "security group that will call your services"
+    Type: List<AWS::EC2::SecurityGroup::Id>
+
+  EC2KeyPairName:
+    Description: "Name of key pair used for authentication for instance"
+    Type: String
+    Default: ""
+
+Conditions:
+  HasInstanceProfile: !Not [!Equals [!Ref IAMInstanceProfileRoleName,""]]
+  HasKeyPair: !Not [!Equals [!Ref EC2KeyPairName,""]]
+  SupportIOPS: !Or [!Equals [!Ref VolumeType,"gp2"], !Equals [!Ref VolumeType,"standard"], !Equals [!Ref VolumeType,"sc1"], !Equals [!Ref VolumeType,"st1"]]
+
+Mappings:
+  ShortEnvMap:
+    DEVELOPMENT:
+      "ShortEnv": "dev"
+    PRODUCTION:
+      "ShortEnv": "prod"
+Resources:
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+        ImageId: !Ref AmiId
+        InstanceType: !Ref InstanceType
+        
+        SubnetId: !Ref SubnetID
+        IamInstanceProfile:  !If
+          - HasInstanceProfile
+          - !Ref EC2InstanceProfile
+          - !Ref AWS::NoValue
+
+        Monitoring: "true"
+
+        BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: !Ref VolumeType
+            Encrypted: "true"
+            KmsKeyId: !Ref AWS::NoValue
+            Iops: !If
+              - SupportIOPS
+              - !Ref AWS::NoValue
+              - "100"
+            DeleteOnTermination: "false"
+            VolumeSize: !Ref EbsVolSize
+        
+        
+        SecurityGroupIds: !Ref SecurityGroupIDs
+        
+        KeyName: !If
+          - HasKeyPair
+          - !Ref EC2KeyPairName
+          - Fn::Sub:
+              - nokku-${EnvName}-keypair
+              - {EnvName: !FindInMap [ShortEnvMap,!Ref Environment,"ShortEnv"]}
+        Tags:
+          - Key: 'Environment'
+            Value: !Ref Environment
+          - Key: 'ResourceOwner'
+            Value: !Ref ResourceOwner
+          - Key: 'ProjectName'
+            Value: !Ref ProjectName
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName:
+        Fn::Sub:
+          - "nokku-${EnvName}-EC2InstanceProfile"
+          - {EnvName: !FindInMap [ShortEnvMap,!Ref Environment,"ShortEnv"]}
+
+      Path: "/service-role/"
+      Roles:
+        - !Ref IAMInstanceProfileRoleName 
+  
+Outputs:
+  AvailabiltyZone:
+    Value: !GetAtt EC2Instance.AvailabilityZone

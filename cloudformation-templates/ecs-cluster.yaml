@@ -1,0 +1,210 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Launch ECS Cluster
+
+Parameters:
+  Environment:
+    Description: "environment" 
+    Type: String
+    AllowedValues: ["DEVELOPMENT","PRODUCTION"]
+  ResourceOwner:
+    Description: "ResourceOwner"
+    Type: String
+    Default: "cloudNokku"
+  ProjectName:
+    Description: "Name of the Project" 
+    Type: String
+  
+  SubEnvironment:
+    Description: Name of sub-environment for this ResourceOwner
+    Type: String
+    Default: ""
+  EcsSubnets:
+    Description: "on which subnet insatnce will be launched"
+    Type: List<AWS::EC2::Subnet::Id>
+  AmiId:
+    Description: "Ami of the instance"
+    Type: "AWS::EC2::Image::Id"
+  InstanceType:
+    Description: "InstanceType"
+    Type: String
+
+  ClusterSizeMin:
+    Description: choose minimum number of instances that should be deployed first.
+    Type: Number
+  ClusterSizeMax:
+    Description: choose Max number of instances that should be deployed first.
+    Type: Number
+  ClusterSizeDesired:
+    Description: choose desired number of instances that should be deployed first.
+    Type: Number
+  ScalingCPUTarget:
+    Description: choose target CPU value for autoscaling
+    Type: Number
+  IngressSecurityGroup:
+    Description: Name of SG that will be allowed to call services inside of cluster
+    Type: String
+
+    
+Conditions:
+  HasSubEnv:
+    !Not [!Equals [!Ref SubEnvironment , ""]]
+
+Mappings:
+  ShortEnvMap:
+    DEVELOPMENT:
+      "ShortEnv": "dev"
+    PRODUCTION:
+      "ShortEnv": "prod"
+
+Resources:
+  #ECS SG - Ingress from LB added by default
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupName:
+        !If
+          - HasSubEnv
+          - Fn::Sub:
+              - ${ProjectName}-${SubEnvironment}-${EnvName}-sg
+              - {EnvName: !FindInMap [ShortEnvMap,!Ref Environment,"ShortEnv"]}
+          - Fn::Sub:
+              - ${ProjectName}-${EnvName}-sg
+              - {EnvName: !FindInMap [ShortEnvMap,!Ref Environment,"ShortEnv"]}
+
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref IngressSecurityGroup
+          IpProtocol: "-1" 
+      Tags:
+          - Key: 'Environment'
+            Value: !Ref Environment
+          - Key: 'ResourceOwner'
+            Value: !Ref ResourceOwner
+          - Key: 'ProjectName'
+            Value: !Ref ProjectName
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName:
+        !If
+          - HasSubEnv
+          - Fn::Sub:
+              - ${ProjectName}-${SubEnvironment}-${EnvName}
+              - {EnvName: !FindInMap [ShortEnvMap,!Ref Environment,"ShortEnv"]}
+          - Fn::Sub:
+              - ${ProjectName}-${EnvName}
+              - {EnvName: !FindInMap [ShortEnvMap,!Ref Environment,"ShortEnv"]}
+
+      
+  #ECS Service Role allow ECS to control/launch/terminate EC2 instance
+  # This Role will be available for each container running on cluster
+
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      RoleName:
+        !If 
+          - HasSubEnv
+          - Fn::Sub:
+              - ${ProjectName}-ecs-service-role-${SubEnvironment}-${EnvName}
+              - {EnvName: !FindInMap [ShortEnvMap,!Ref Environment,"ShortEnv"]}
+          - Fn::Sub:
+              - ${ProjectName}-ecs-service-role-${EnvName}
+              - {EnvName: !FindInMap [ShortEnvMap,!Ref Environment,"ShortEnv"]}
+      PermissionsBoundary:
+        Fn::Sub: "arn:aws:iam::${AWS::AccountId}:policy/cloudNokku-permission-boundary"
+      AssumeRolePolicyDocument: |
+        {
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "ec2.amazonaws.com"
+            }
+          }]
+        }
+      Policies:
+        - PolicyName:
+          !If 
+            - HasSubEnv
+            - Fn::Sub:
+                - ${ProjectName}-ecs-service-policy-${SubEnvironment}-${EnvName}
+                - {EnvName: !FindInMap [ShortEnvMap,!Ref Environment,"ShortEnv"]}
+            - Fn::Sub:
+                - ${ProjectName}-ecs-service-policy-${EnvName}
+                - {EnvName: !FindInMap [ShortEnvMap,!Ref Environment,"ShortEnv"]}
+          PolicyDocument: |
+            {
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "ecs:CreateCluster",
+                        "ecs:DeregisterContainerInstance",
+                        "ecs:DiscoverPollEndpoint",
+                        "ecs:Poll",
+                        "ecs:RegisterContainerInstance",
+                        "ecs:StartTelemetrySession",
+                        "ecs:Submit*",
+                        "logs:CreateLogStream",
+                        "ecr:BatchCheckLayerAvailability",
+                        "ecr:GetDownloadUrlForLayer",
+                        "ecr:GetAuthorizationToken"
+                    ],
+                    "Resource": "*"
+                }]
+            }
+      Tags:
+          - Key: 'Environment'
+            Value: !Ref Environment
+          - Key: 'ResourceOwner'
+            Value: !Ref ResourceOwner
+          - Key: 'ProjectName'
+            Value: !Ref ProjectName
+      
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref ECSRole 
+
+  #ECS Launch Config for ECS Cluster
+  # It Used AMI ID specified as parameter to deploy EC2 instances
+  #with the above specified SGs and Instance Profiles
+  ECSLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      SecurityGroups: 
+        - !Ref ECSSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData:
+        "Fn::Base64": !Sub |
+          #/bin/bash
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ECSLaunchConfiguration
+          /opt/aws/bin/cfn-signal -e --region ${AWS::Region} --stack ${AWS::StackName} --resource ECSLaunchConfiguration
+
+    Metadata:
+      AWS::CloudFormation::Init: 
+        config:
+          commands:
+            01_add_instance_to_cluster:
+              command: !Sub echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/config
+            02_bastion_user_docker_group:
+              command: !Sub |
+                adduser ${ProjectName}-user &&
+                usermod -aG docker ${ProjectName}-user
+
+          files:
+            ""
+          services:
+
+  #ECS Cluster Autoscaling group
+  # the default desired capacity is set to minimum size
+  #group  will update EC2 one by one
+  # the minimum instances in service would be min size of cluster
+  

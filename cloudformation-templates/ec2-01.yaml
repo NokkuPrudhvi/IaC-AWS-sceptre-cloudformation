@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Launch EC2 Instance
+
+Parameters:
+  Environment:
+    Description: "environment" 
+    Type: String
+    AllowedValues: ["DEVELOPMENT","PRODUCTION"]
+  ResourceOwner:
+    Description: "ResourceOwner"
+    Type: String
+    Default: "cloudNokku@gmail.com"
+  ProjectName:
+    Description: "Name of the Project" 
+    Type: String
+    Default: "cloudNokku"
+  
+  AmiId:
+    Description: "Ami of the instance"
+    Type: "AWS::EC2::Image::Id"
+    Default: "ami-0c2b8ca1dad447f8a"
+  InstanceType:
+    Description: "InstanceType"
+    Type: String
+    Default: "t2.micro"
+  SubnetID:
+    Description: "on which subnet insatnce will be launched"
+    Type: String
+    Default: "subnet-01ad844262e1531b4"
+  
+  VolumeType:
+    Description: "Name of role associate with instance profile"
+    Type: String
+    AllowedValues: ["gp2","gp3","io1","io2","sc1","st1","standard"]
+    Default: "gp2"
+  EbsVolSize:
+    Description: "Name of role associate with instance profile"
+    Type: Number
+    Default: 20
+
+  SecurityGroupIDs:
+    Description: "security group that will call your services"
+    Type: List<AWS::EC2::SecurityGroup::Id>
+
+  EC2KeyPairName:
+    Description: "Name of key pair used for authentication for instance"
+    Type: String
+    Default: "github-keypair"
+
+ 
+Mappings:
+  ShortEnvMap:
+    DEVELOPMENT:
+      "ShortEnv": "dev"
+    PRODUCTION:
+      "ShortEnv": "prod"
+
+Resources:
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+        ImageId: !Ref AmiId
+        InstanceType: !Ref InstanceType
+        
+        SubnetId: !Ref SubnetID
+
+        BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: !Ref VolumeType
+            VolumeSize: !Ref EbsVolSize
+        
+        
+        SecurityGroupIds: !Ref SecurityGroupIDs
+        
+        KeyName:  !Ref EC2KeyPairName
+
+        Tags:
+          - Key: 'Environment'
+            Value: !Ref Environment
+          - Key: 'ResourceOwner'
+            Value: !Ref ResourceOwner
+          - Key: 'ProjectName'
+            Value: !Ref ProjectName
+
+
+  
+Outputs:
+  AvailabiltyZone:
+    Value: !GetAtt EC2Instance.AvailabilityZone
