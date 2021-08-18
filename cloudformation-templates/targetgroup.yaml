@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Launch ALB 
+
+Parameters:
+  Environment:
+    Description: "environment" 
+    Type: String
+    AllowedValues: ["DEVELOPMENT","PRODUCTION"]
+    Default: "DEVELOPMENT"
+  ResourceOwner:
+    Description: "ResourceOwner"
+    Type: String
+    Default: "cloudNokku"
+  ProjectName:
+    Description: "Name of the Project" 
+    Type: String
+    Default: "ALB"
+
+
+Resources:
+  LBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: "true"
+      HealthCheckIntervalSeconds: "30"
+      HealthCheckPath: "/"
+      HealthCheckPort: "8080"
+      HealthCheckProtocol: "HTTP"
+      HealthCheckTimeoutSeconds: "5"
+      HealthyThresholdCount: "5"
+      Name: ${ProjectName}-${ResourceName}-tg
+      Port: "8080"
+      Protocol: "HTTP"
+      ProtocolVersion: "HTTP1"
+      
+      Targets:
+        - AvailabilityZone: !Ref TargetAvailabiltyZone
+        - Id: !Ref TargetID
+        - 
+      TargetType: !Ref TargetType

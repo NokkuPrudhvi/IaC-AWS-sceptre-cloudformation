@@ -1,0 +1,23 @@
+template_path: codebuild.yaml
+parameters:
+  GitHubRepo: "https://github.com/NokkuPrudhvi/cloudNokku-sam-lambda.git"
+  GitHubBranch: "main"
+  CodeBuildServiceRole: "arn:aws:iam::659121023370:role/codebuildServiceRole"
+  EnvironmentType: "DEVELOPMENT"
+  ProjectName: "cloud" 
+  ResourceOwner: "cloudnokku"
+  ResourceName: "codebuild"
+  EnvironmentName: "dev"
+
+
+  vpcId: "vpc-a2e72adf"
+  vpcSubnet: "subnet-8142f3e7,subnet-7ee25d5f,subnet-a9cf72f6"
+  vpcSecurityGroup: "sg-d058a6e0"
+  StartBuildOnPRUpdates: "false"
+  StartBuildOnPush: "false"
+  BuildInstanceSize: "SMALL"
+  EnableCodepipelineIntegration: "false"
+
+stack_tags:
+  environment_name: "development"
+  project: "cloudNokku"

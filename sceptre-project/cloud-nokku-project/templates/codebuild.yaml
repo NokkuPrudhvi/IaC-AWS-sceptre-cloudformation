@@ -1,0 +1,209 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Launch codebuild
+
+Parameters:
+
+  ProjectName: 
+    Type: String
+  ResourceName: 
+    Type: String
+  EnvironmentName: 
+    Type: String
+
+  ResourceOwner:
+    Description: "ResourceOwner"
+    Type: String
+    Default: "cloudNokku"
+
+  EnvironmentType:  
+    Type: String
+
+  #provided by user and used in creating codebuild
+  GitHubRepo: 
+    Type: String
+  GitHubBranch: 
+    Type: String
+  CodeBuildServiceRole: 
+    Type: String
+  
+  vpcId:
+    Type: String
+  vpcSubnet:
+    Type: CommaDelimitedList
+  vpcSecurityGroup:
+    Type: String
+  
+  ProvideArtifactoryCreds:
+    Type: String
+    Default: "false"
+  
+  StartBuildOnPush:
+    Type: String
+    Default: "true" 
+  StartBuildOnPRUpdates:
+    Type: String
+    Default: "true"
+
+  platformImage:
+    Type: String
+    Default: "AmazonLinux"
+  
+  EnableCodepipelineIntegration:
+    Type: String
+    Default: "false"
+  EnableSourceVersion:
+    Type: String
+    Default: "false"
+  #provided by sceptre not via user
+  buildspecfile:
+    Type: String
+    Default: "buildspec.yaml"
+  
+
+  BuildInstanceSize:
+    Type: String
+    Default: "SMALL"  
+  CreateNotificationRule:
+      Description: "for codbuild stage transistion notification"
+      Type: String
+      Default: "false"
+  TopicArn:
+    Description: "topic"
+    Type: String
+    Default: "nn"
+
+Conditions: 
+  ShouldProvideArtifactoryCreds:
+    !Equals ["true", !Ref ProvideArtifactoryCreds]
+  ShouldStartBuildOnPush:
+    !Equals ["true", !Ref StartBuildOnPush]
+  ShouldStartBuildOnPRUpdates:
+    !Equals ["true", !Ref StartBuildOnPRUpdates]
+  IsCodepipelineStage:
+    !Equals ["true", !Ref EnableCodepipelineIntegration]
+  IsEnableSourceVersion:
+    !Equals ["true", !Ref EnableSourceVersion]
+  isImageUbuntu:
+    !Equals ["true", !Ref platformImage]
+  HasCreateNotificationRule:
+    !Equals [!Ref CreateNotificationRule, "true"]
+
+Resources:
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type:  !If
+          - IsCodepipelineStage
+          - "CODEPIPELINE"
+          - "NO_ARTIFACTS"
+      BadgeEnabled: !If
+        - IsCodepipelineStage
+        - false
+        - true
+
+      Environment:
+        PrivilegedMode: true
+        ComputeType: !Sub "BUILD_GENERAL1_${BuildInstanceSize}"
+        Type: LINUX_CONTAINER
+        Image: 
+          !If
+            - isImageUbuntu
+            - "aws/codebuild/standard:4.0"
+            - "aws/codebuild/amazonlinux2-x86_64-standard:3.0"
+        EnvironmentVariables:
+          !If
+            - ShouldProvideArtifactoryCreds
+            - 
+              - Name: "ARTIFACTORY_USER"
+                Type: "PARAMETER_STORE"
+                Value: "/project/user"
+              - Name: "ARTIFACTORY_PASS"
+                Type: "PARAMETER_STORE"
+                Value: "/project/pass"
+            - []
+      LogsConfig:
+        CloudWatchLogs:
+          Status: "ENABLED"      
+
+      Name: !Ref AWS::StackName
+    
+      Source: !If
+        - IsCodepipelineStage
+        - Type: "CODEPIPELINE"
+          BuildSpec: !Ref buildspecfile
+        - Type: GITHUB
+          Location: !Ref GitHubRepo
+          GitCloneDepth: 1
+          GitSubmodulesConfig:
+            FetchSubmodules: false
+          BuildSpec: !Ref buildspecfile
+          ReportBuildStatus: false
+          InsecureSsl: false  
+
+      SorceVersion:
+        Fn::If:
+          - IsEnableSourceVersion
+          - {"Ref": "GitHubBranch"}
+          - {"Ref": "AWS::NoValue"}
+
+      # Triggers: !If
+      #     - IsCodepipelineStage
+      #     - !Ref AWS::NoValue
+      #     - Webhook: true
+      #       FilterGroups:
+      #         - ShouldStartBuildOnPush
+      #         - Fn::If:
+      #           - ShouldStartBuildOnPRUpdates
+      #           - [[
+      #               {"Type": "EVENT","Pattern": "PUSH,PULL_REQUEST_MERGED","ExcludeMatchedPattern": false},
+      #               {"Type": "HEAD_REF","Pattern": {"Fn::Sub": ["^refs/heads/${GitHubBranch}$"]},"ExcludeMatchedPattern": false}
+      #             ],
+      #             [
+      #               {"Type": "EVENT","Pattern": "PULL_REQUEST_CREATED,PULL_REQUEST_REOPENED,PULL_REQUEST_UPDATED","ExcludeMatchedPattern": false}
+      #             ]]
+      #           - Fn::If:
+      #             - ShouldStartBuildOnPRUpdates
+      #             - [[
+      #               {"Type": "EVENT","Pattern": "PULL_REQUEST_CREATED,PULL_REQUEST_REOPENED,PULL_REQUEST_UPDATED","ExcludeMatchedPattern": false}
+      #               ]]
+      #             - !Ref AWS::NoValue
+
+      ServiceRole: !Ref CodeBuildServiceRole
+
+      VpcConfig:
+        VpcId: !Ref vpcId
+        Subnets: !Ref vpcSubnet
+        SecurityGroupIds: [!Ref vpcSecurityGroup]
+
+      Tags:
+        - Key: 'EnvironmentType'
+          Value: !Ref EnvironmentType
+        - Key: 'ResourceOwner'
+          Value: !Ref ResourceOwner
+        - Key: 'ProjectName'
+          Value: !Ref ProjectName
+  
+  # CodeStarNotificationRule:
+  #   Type: "AWS::CodeStarNotifications::NotificationRule"
+  #   Condition: HasCreateNotificationRule
+  #   Properties:
+  #     Name: !Join
+  #       - '-'
+  #       - - !Ref AWS::StackName
+  #         - NotificationRule 
+  #     DetailType: FULL
+  #     Resource: !GetAtt CodeBuildProject.Arn
+  #     EventTypeIds:
+  #       - codebuild-project-build-state-failed
+  #       - codebuild-project-build-state-succeded
+  #     Targets:
+  #       - TargetType: SNS
+  #         TargetAddress: !Ref TopicArn
+  #     Tags:
+  #       - Key: 'EnvironmentType'
+  #         Value: !Ref EnvironmentType
+  #       - Key: 'ResourceOwner'
+  #         Value: !Ref ResourceOwner
+  #       - Key: 'ProjectName'
+  #         Value: !Ref ProjectName
