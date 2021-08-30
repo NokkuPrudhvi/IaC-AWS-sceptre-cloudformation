@@ -48,3 +48,41 @@ Puppet is another popular configuration management tool that helps engineers con
 
 Infrastructure as Code can simplify and accelerate your infrastructure provisioning process, help you avoid mistakes and comply with policies, 
 keep your environments consistent, and save your company a lot of time and money.
+
+
+Speed
+With IaC, teams quickly provision and configure infrastructure for development, testing, and production. Quick setups speed up the entire software development lifecycle.
+
+The response rate to customer feedback is also faster. Developers add new features quickly without needing to wait for more resources. Quick turnarounds to user requests improve customer satisfaction.
+
+Standardization
+Developers get to rely on system uniformity during the delivery process. There are no configuration drifts, a situation in which different servers develop unique settings due to frequent manual updates. Drifts lead to issues at deployment and security concerns.
+
+IaC prevents configuration drifts by provisioning the same environment every time you run the same manifest.
+
+Reusability
+DevOps teams can reuse existing IaC scripts in various environments. There is no need to start from scratch every time you need new infrastructure.
+
+Collaboration
+Version control allows multiple people to collaborate on the same environment. Thanks to version control, developers work on different infrastructure sections and roll out changes in a controlled manner.
+
+Efficiency
+Infrastructure as Code improves efficiency and productivity across the development lifecycle.
+
+Programmers create sandbox environments to develop in isolation. Operations can quickly provision infrastructure for security tests. QA engineers have perfect copies of the production environments during testing. When it is deployment time, developers push both infrastructure and code to production in one step.
+
+IaC also keeps track of all environment build-up commands in a repository. You can quickly go back to a previous instance or redeploy an environment if you run into a problem.
+
+Lower Cost
+IaC reduces the costs of developing software. There is no need to spend resources on setting up environments manually.
+
+Most IaC platforms offer a consumption-based cost structure. You only pay for the resources you are actively using, so there is no unnecessary overhead.
+
+Scalability
+IaC makes it easy to add resources to existing infrastructure. Upgrades are provisioned quickly, and with ease, so you can quickly expand during burst periods.
+
+For example, organizations running online services can easily scale up to keep up with user demands.
+
+Disaster Recovery
+In the event of a disaster, it is easy to recover large systems quickly with IaC. You just re-run the same manifest, and the system will be back online at a different location if need be.
+
